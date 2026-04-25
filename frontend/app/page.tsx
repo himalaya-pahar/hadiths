@@ -33,7 +33,7 @@ export default function HadithApp() {
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportText, setReportText] = useState("");
 
-  const API_BASE = "http://localhost:8000";
+  const API_BASE = "https://hadiths.onrender.com";
 
   // Arabic text clean korar logic
   const formatEnglishOnly = (text: string) => {
