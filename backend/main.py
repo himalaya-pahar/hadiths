@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client, Client
 import random
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 app = FastAPI()
 
@@ -14,14 +16,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Supabase credentials (WARNING: Keep these secret in production!)
-SUPABASE_URL = "https://hznpuoxembyeawtgycke.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6bnB1b3hlbWJ5ZWF3dGd5Y2tlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNDI4NzksImV4cCI6MjA5MjYxODg3OX0.TE72VtKkD9pPlm0ox2DrhAib84PvR-UY36v3Jcm31sE"
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Table name in database
-TABLE_NAME = "hadiths" 
+TABLE_NAME = "hadiths_v2" 
 
 # In-memory cache to speed up repeated dropdown requests
 db_cache = {
