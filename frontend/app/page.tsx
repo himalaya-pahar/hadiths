@@ -823,6 +823,11 @@ export default function HadithApp() {
                     <span>{hadith.Book}</span>
                     <span className="ref-sep">·</span>
                     <span className="ref-inline">{hadith["In-book reference"]}</span>
+                    {hadith.Reference && (
+                      <a href={hadith.Reference} target="_blank" rel="noopener noreferrer" aria-label="Open source">
+                        <IconLink />
+                      </a>
+                    )}
                   </div>
                 </div>
 
