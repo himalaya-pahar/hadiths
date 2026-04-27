@@ -32,6 +32,7 @@ db_cache = {
 
 
 @app.get("/")
+@app.head("/")
 def health_check():
     return {"status": "Alhamdulillah, Server is running!"}
 
