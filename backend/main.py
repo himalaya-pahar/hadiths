@@ -30,6 +30,11 @@ db_cache = {
     "chapters_by_source": {}
 }
 
+
+@app.get("/")
+def health_check():
+    return {"status": "Alhamdulillah, Server is running!"}
+
 @app.get("/sources")
 def get_sources():
     # Return from cache if already fetched
