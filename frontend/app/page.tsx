@@ -683,6 +683,45 @@ export default function HadithApp() {
           .modal { padding: 24px; }
           .header { padding: 48px 0 40px; }
         }
+        /* 1. Header container: Fixed height and no wrapping to keep it clean */
+.card-header {
+  padding: 18px 24px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  flex-wrap: nowrap; /* Strictly prevent items from dropping to the next line */
+}
+
+/* 2. Left section: Grow to fill space but allow shrinking for ellipsis */
+.card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0; /* Essential for ellipsis to work inside a flex item */
+}
+
+/* 3. Chapter text: Truncate with dots (...) if it hits the buttons */
+.ref-chapter {
+  font-size: 11px;
+  color: var(--text3);
+  font-style: italic;
+  white-space: nowrap; /* Keep text on a single line */
+  overflow: hidden; /* Hide the overlapping text */
+  text-overflow: ellipsis; /* Add the '...' dots */
+  flex: 1; /* Take up as much space as possible */
+}
+
+/* 4. Language toggles: Locked to the right side, never shrinks */
+.lang-toggles {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0; /* Prevent buttons from being squashed by long titles */
+}
       `}</style>
 
       <div className={`app${dark ? " dark" : ""}`}>
