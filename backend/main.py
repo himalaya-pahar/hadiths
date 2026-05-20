@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from supabase import create_client, Client
+from pydantic import BaseModel
 import random
 import os
 from dotenv import load_dotenv
@@ -31,10 +32,13 @@ db_cache = {
 }
 
 
+
+
 @app.get("/")
 @app.head("/")
 def health_check():
     return {"status": "Alhamdulillah, Server is running!"}
+
 
 @app.get("/sources")
 def get_sources():
@@ -104,7 +108,72 @@ def get_random_hadith(source: str = None, chapter_no: int = None):
         
     return {"error": "No hadith found"}
 
-from pydantic import BaseModel
+@app.get("/hadiths")
+def get_paginated_hadiths(
+    source: str = None, 
+    chapter_no: int = None, 
+    page: int = 1, 
+    limit: int = 1,
+    hadith_no: str = None
+):
+    target_page = page
+
+    # If searching for a specific hadith number
+    if hadith_no:
+        # Strip any accidental whitespace from user input
+        clean_hadith_no = hadith_no.strip()
+        
+        # Helper function to build the base query freshly
+        def build_find_query():
+            q = supabase.table(TABLE_NAME).select("id")
+            if source: q = q.eq("Book", source)
+            if chapter_no is not None: q = q.eq("Chapter_Number", chapter_no)
+            return q
+            
+        # 1. Try pattern matching first: match ending with " [number]" (e.g., "Book 1, Hadith 12")
+        # The space before the number prevents "12" from matching "112"
+        target_res = build_find_query().ilike("In-book reference", f"% {clean_hadith_no}").execute()
+        
+        # 2. If no result found from pattern matching, fallback to exact match just in case
+        if not target_res.data:
+            target_res = build_find_query().eq("In-book reference", clean_hadith_no).execute()
+            
+        # If the specific hadith is found, calculate its page position
+        if target_res.data:
+            target_id = target_res.data[0]["id"]
+            
+            # Count how many hadiths exist before this specific hadith
+            count_query = supabase.table(TABLE_NAME).select("*", count="exact")
+            if source: count_query = count_query.eq("Book", source)
+            if chapter_no is not None: count_query = count_query.eq("Chapter_Number", chapter_no)
+            
+            # Get the serial position by counting rows with id <= target_id
+            count_res = count_query.lte("id", target_id).limit(1).execute()
+            position = count_res.count if count_res.count else 1
+            
+            # 3. Calculate the exact target page based on position and limit
+            target_page = ((position - 1) // limit) + 1
+
+    # Normal pagination logic using the calculated target_page
+    main_query = supabase.table(TABLE_NAME).select("*", count="exact")
+    if source: main_query = main_query.eq("Book", source)
+    if chapter_no is not None: main_query = main_query.eq("Chapter_Number", chapter_no)
+    
+    start_index = (target_page - 1) * limit
+    end_index = start_index + limit - 1
+    
+    response = main_query.order("id").range(start_index, end_index).execute()
+    
+    total_count = response.count if response.count else 0
+    total_pages = (total_count + limit - 1) // limit if total_count else 0
+    
+    return {
+        "data": response.data,
+        "total_count": total_count,
+        "current_page": target_page,
+        "total_pages": total_pages
+    }
+
 
 # Report data structure
 class ReportRequest(BaseModel):
