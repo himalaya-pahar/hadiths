@@ -40,7 +40,7 @@ const formatEnglishOnly = (text: string) => {
 const buildCopyText = (h: Hadith) =>
   `"${h.English_Text.replace(/\s+/g, " ").trim()}"\n\n— ${h.Book}, ${h["In-book reference"]}\nReference: ${h.Reference}`;
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE = "https://hadiths-pi.vercel.app";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 const IconCopy = () => (
