@@ -40,7 +40,7 @@ const formatEnglishOnly = (text: string) => {
 const buildCopyText = (h: Hadith) =>
   `"${h.English_Text.replace(/\s+/g, " ").trim()}"\n\n— ${h.Book}, ${h["In-book reference"]}\nReference: ${h.Reference}`;
 
-const API_BASE = "https://hadiths-pi.vercel.app";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 const IconCopy = () => (
@@ -132,12 +132,16 @@ export default function HadithApp() {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [selectedSource, setSelectedSource] = useState("");
   const [selectedChapter, setSelectedChapter] = useState("");
-  const [hadith, setHadith] = useState<Hadith | null>(null);
+  const [hadiths, setHadiths] = useState<Hadith[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [searchNo, setSearchNo] = useState("");
+  const [isRandomMode, setIsRandomMode] = useState(false);
   const [hadithKey, setHadithKey] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [activeLang, setActiveLang] = useState<"ar" | "bn" | "en">("en");
-  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [reportingHadith, setReportingHadith] = useState<Hadith | null>(null);
   const [reportText, setReportText] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -158,25 +162,74 @@ export default function HadithApp() {
     setSelectedChapter("");
   }, [selectedSource]);
 
+  // FIXED: Replaced old 'isReportOpen' with 'reportingHadith'
   useEffect(() => {
-    if (!isReportOpen) return;
-    const fn = (e: KeyboardEvent) => { if (e.key === "Escape") setIsReportOpen(false); };
+    if (!reportingHadith) return;
+    const fn = (e: KeyboardEvent) => { if (e.key === "Escape") setReportingHadith(null); };
     window.addEventListener("keydown", fn);
     return () => window.removeEventListener("keydown", fn);
-  }, [isReportOpen]);
+  }, [reportingHadith]);
 
+  // 1. Fetch Sequential Hadiths (with Pagination & Search)
+  // Added isSearch parameter to distinguish between jumping to a hadith and just changing pages
+  const fetchSequentialHadiths = async (page = 1, isSearch = false) => {
+    
+    if (!selectedChapter) {
+      setFetchError("Please select a book and a chapter first to start reading.");
+      return;
+    }
+    setLoading(true);
+    setCopiedIndex(null);
+    setFetchError(null);
+    setIsRandomMode(false);
+    
+    const params = new URLSearchParams({ page: page.toString(), limit: "1" });
+    if (selectedSource) params.set("source", selectedSource);
+    if (selectedChapter) params.set("chapter_no", selectedChapter);
+    
+    // ONLY send hadith_no to backend if we explicitly clicked the search/start button
+    if (isSearch && searchNo.trim()) {
+        params.set("hadith_no", searchNo.trim());
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/hadiths?${params}`);
+      if (!res.ok) throw new Error("Bad response");
+      const data = await res.json();
+      setHadiths(data.data ?? []);
+      setCurrentPage(data.current_page); // Updated from backend calculated page
+      setTotalPages(data.total_pages);
+      setHadithKey(k => k + 1);
+      
+      // Clear the search box after jumping to the specific hadith to avoid confusion
+      if (isSearch) setSearchNo("");
+      
+    } catch {
+      setFetchError("Could not load hadiths. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 2. Fetch Single Random Hadith
   const fetchRandomHadith = async () => {
     setLoading(true);
-    setCopied(false);
+    setCopiedIndex(null); // FIXED: Changed from setCopied(false)
     setFetchError(null);
+    setIsRandomMode(true);
+    
     const params = new URLSearchParams();
     if (selectedSource) params.set("source", selectedSource);
     if (selectedChapter) params.set("chapter_no", selectedChapter);
     const q = params.toString() ? `?${params}` : "";
+    
     try {
       const res = await fetch(`${API_BASE}/random-hadith${q}`);
       if (!res.ok) throw new Error("Bad response");
-      setHadith(await res.json());
+      const data = await res.json();
+      setHadiths([data]); // Put single hadith in array
+      setCurrentPage(1);
+      setTotalPages(1);
       setHadithKey(k => k + 1);
     } catch {
       setFetchError("Could not load hadith. Please try again.");
@@ -185,12 +238,11 @@ export default function HadithApp() {
     }
   };
 
-  const handleCopy = async () => {
-    if (!hadith || copied) return;
+  const handleCopy = async (h: Hadith, index: number) => {
     try {
-      await navigator.clipboard.writeText(buildCopyText(hadith));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(buildCopyText(h));
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(null), 2000);
     } catch {
       alert("Failed to copy. Please try again.");
     }
@@ -198,27 +250,27 @@ export default function HadithApp() {
 
   const handleReportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!hadith || !reportText.trim()) return;
+    if (!reportingHadith || !reportText.trim()) return;
     try {
       const res = await fetch(`${API_BASE}/report-issue`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          book_name: hadith.Book,
-          hadith_ref: hadith["In-book reference"],
+          book_name: reportingHadith.Book,
+          hadith_ref: reportingHadith["In-book reference"],
           issue_description: reportText.trim(),
         }),
       });
       if (res.ok) {
         setIsSuccess(true);
         setReportText("");
-        setTimeout(() => { setIsReportOpen(false); setIsSuccess(false); }, 3000);
+        setTimeout(() => { setReportingHadith(null); setIsSuccess(false); }, 3000);
       }
     } catch {
       alert("Something went wrong. Please try again.");
     }
   };
-
+  
   return (
     <>
       <style>{`
@@ -683,7 +735,7 @@ export default function HadithApp() {
           .modal { padding: 24px; }
           .header { padding: 48px 0 40px; }
         }
-        /* 1. Header container: Fixed height and no wrapping to keep it clean */
+          /* 1. Header container: Fixed height and no wrapping to keep it clean */
 .card-header {
   padding: 18px 24px 16px;
   display: flex;
@@ -722,6 +774,56 @@ export default function HadithApp() {
   gap: 5px;
   flex-shrink: 0; /* Prevent buttons from being squashed by long titles */
 }
+  /* ── New Controls Styles ── */
+        .search-input {
+          width: 100%;
+          background: var(--surface); border: 1px solid var(--border2);
+          border-radius: var(--radius-sm); color: var(--text1);
+          font-family: 'Sora', sans-serif; font-size: 13px; font-weight: 400;
+          padding: 15px 16px; outline: none;
+          box-shadow: var(--shadow-sm);
+          transition: all var(--transition);
+        }
+        .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-faint), var(--shadow-sm); }
+        .action-buttons { 
+          display: flex; 
+          gap: 12px; 
+          flex-basis: 100%;
+          justify-content: center;
+          margin-top: 8px; 
+        }
+        
+        .btn-secondary {
+          height: 54px; padding: 0 24px;
+          background: var(--surface); color: var(--text2);
+          border: 1px solid var(--border2); border-radius: var(--radius-sm);
+          font-family: 'Sora', sans-serif; font-size: 13px; font-weight: 600;
+          cursor: pointer; display: flex; align-items: center; justify-content: center;
+          transition: all var(--transition);
+        }
+        .btn-secondary:hover { border-color: var(--accent); color: var(--accent); background: var(--surface2); }
+        .btn-secondary:disabled { opacity: 0.52; cursor: not-allowed; }
+
+        /* ── Pagination Styles ── */
+        .pagination {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 16px 24px; background: var(--surface);
+          border: 1px solid var(--border); border-radius: var(--radius-sm);
+          margin-top: 24px; box-shadow: var(--shadow-sm);
+        }
+        .page-btn {
+          background: transparent; border: 1px solid var(--border2);
+          color: var(--text2); font-family: 'Sora', sans-serif;
+          font-size: 12px; font-weight: 600; padding: 8px 16px;
+          border-radius: 6px; cursor: pointer; transition: all var(--transition);
+        }
+        .page-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+        .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .page-info { font-size: 12px; color: var(--text3); font-weight: 500; }
+        
+        @media (max-width: 600px) {
+          .action-buttons { flex-direction: column; width: 100%; }
+        }
       `}</style>
 
       <div className={`app${dark ? " dark" : ""}`}>
@@ -756,7 +858,6 @@ export default function HadithApp() {
           {/* ── Controls ── */}
           <section className="controls">
             <div className="select-wrap">
-              {/* <span className="select-label">Book</span> */}
               <span className="select-icon"><IconChevron /></span>
               <select value={selectedSource} onChange={e => setSelectedSource(e.target.value)}>
                 <option value="">All Books</option>
@@ -765,7 +866,6 @@ export default function HadithApp() {
             </div>
 
             <div className="select-wrap">
-              {/* <span className="select-label">Chapter</span> */}
               <span className="select-icon"><IconChevron /></span>
               <select
                 value={selectedChapter}
@@ -781,11 +881,26 @@ export default function HadithApp() {
               </select>
             </div>
 
-            <button className="btn-primary" onClick={fetchRandomHadith} disabled={loading}>
-              {loading ? (
-                <><div className="spinner" />Searching…</>
-              ) : "Read Hadith"}
-            </button>
+            {/* New Search Input */}
+            <div className="select-wrap">
+              <input 
+                type="text" 
+                className="search-input" 
+                placeholder="Hadith No..." 
+                value={searchNo}
+                onChange={e => setSearchNo(e.target.value)}
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="action-buttons">
+              <button className="btn-secondary" onClick={() => fetchSequentialHadiths(1, true)} disabled={loading}>
+                {loading && !isRandomMode ? <div className="spinner" /> : "Read Chapter"}
+              </button>
+              <button className="btn-secondary" onClick={fetchRandomHadith} disabled={loading}>
+                {loading && isRandomMode ? <div className="spinner" /> : "Random Hadith"}
+              </button>
+            </div>
           </section>
 
           {/* ── Content ── */}
@@ -796,81 +911,87 @@ export default function HadithApp() {
               <IconAlert />
               <p>{fetchError}</p>
             </div>
-          ) : hadith ? (
-            <article key={hadithKey} className="card">
+          ) : hadiths.length > 0 ? (
+            <div className="hadiths-container">
+              {hadiths.map((h, index) => (
+                <article key={`${hadithKey}-${index}`} className="card" style={{ marginBottom: '24px' }}>
+                  {/* Card header */}
+                  <div className="card-header">
+                    <div className="card-header-left">
+                      <GradeBadge grade={h.Grade} />
+                      {h.Chapter_Title_English && (
+                        <span className="ref-chapter" style={{ display: "inline" }}>
+                          {formatEnglishOnly(h.Chapter_Title_English)}
+                        </span>
+                      )}
+                    </div>
 
-              {/* Card header */}
-              <div className="card-header">
-                <div className="card-header-left">
-                  <GradeBadge grade={hadith.Grade} />
-                  {hadith.Chapter_Title_English && (
-                    <span className="ref-chapter" style={{ display: "inline" }}>
-                      {formatEnglishOnly(hadith.Chapter_Title_English)}
-                    </span>
-                  )}
-                </div>
+                    <div className="lang-toggles">
+                      {h.Arabic_Text && (
+                        <button className={`lang-btn${activeLang === "ar" ? " active" : ""}`} onClick={() => setActiveLang("ar")}>AR</button>
+                      )}
+                      {h.Bangla_Text && (
+                        <button className={`lang-btn${activeLang === "bn" ? " active" : ""}`} onClick={() => setActiveLang("bn")}>BN</button>
+                      )}
+                      {h.English_Text && (
+                        <button className={`lang-btn${activeLang === "en" ? " active" : ""}`} onClick={() => setActiveLang("en")}>EN</button>
+                      )}
+                      
+                      {/* FIXED: Using copiedIndex and handleCopy */}
+                      <button 
+                        className={`copy-btn${copiedIndex === index ? " copied" : ""}`} 
+                        onClick={() => handleCopy(h, index)}
+                        aria-label={copiedIndex === index ? "Copied!" : "Copy hadith"}
+                      >
+                        {copiedIndex === index ? <><IconCheck /><span>Copied</span></> : <IconCopy />}
+                      </button>
+                    </div>
+                  </div>
 
-                <div className="lang-toggles">
-                  {hadith.Arabic_Text && (
-                    <button
-                      className={`lang-btn${activeLang === "ar" ? " active" : ""}`}
-                      onClick={() => setActiveLang("ar")}
-                      title="Show Arabic"
-                    >AR</button>
-                  )}
-                  {hadith.Bangla_Text && (
-                    <button
-                      className={`lang-btn${activeLang === "bn" ? " active" : ""}`}
-                      onClick={() => setActiveLang("bn")}
-                      title="Show Bengali"
-                    >BN</button>
-                  )}
-                  {hadith.English_Text && (
-                    <button
-                      className={`lang-btn${activeLang === "en" ? " active" : ""}`}
-                      onClick={() => setActiveLang("en")}
-                      title="Show English"
-                    >EN</button>
-                  )}
-                  <button
-                    className={`copy-btn${copied ? " copied" : ""}`}
-                    onClick={handleCopy}
-                    aria-label={copied ? "Copied!" : "Copy hadith"}
+                  {/* Card body */}
+                  <div className="card-body">
+                    {h.Arabic_Text && activeLang === "ar" && <p className="arabic-text">{h.Arabic_Text}</p>}
+                    {h.Bangla_Text && activeLang === "bn" && <p className="bangla-text">{h.Bangla_Text}</p>}
+                    {h.English_Text && activeLang === "en" && <p className="english-text">"{h.English_Text}"</p>}
+                  </div>
+
+                  {/* Card footer */}
+                  <div className="card-footer">
+                    <div className="ref-block">
+                      <div className="ref-book">
+                        <span>{h.Book}</span><span className="ref-sep">·</span><span className="ref-inline">{h["In-book reference"]}</span>
+                      </div>
+                    </div>
+                    
+                    {/* FIXED: Setting reportingHadith instead of isReportOpen */}
+                    <button className="report-btn" onClick={() => setReportingHadith(h)}>
+                      <IconFlag /> Report Issue
+                    </button>
+                  </div>
+                </article>
+              ))}
+
+              {/* Pagination Controls */}
+              {!isRandomMode && totalPages > 1 && (
+                <div className="pagination">
+                  <button 
+                    className="page-btn" 
+                    disabled={currentPage === 1} 
+                    onClick={() => fetchSequentialHadiths(currentPage - 1)}
                   >
-                    {copied ? <><IconCheck /><span>Copied</span></> : <IconCopy />}
+                    ← Previous
+                  </button>
+                  <span className="page-info">Page {currentPage} of {totalPages}</span>
+                  <button 
+                    className="page-btn" 
+                    disabled={currentPage === totalPages} 
+                    onClick={() => fetchSequentialHadiths(currentPage + 1)}
+                  >
+                    Next →
                   </button>
                 </div>
-              </div>
-
-              {/* Card body */}
-              <div className="card-body">
-                {hadith.Arabic_Text && activeLang === "ar" && (
-                  <p className="arabic-text">{hadith.Arabic_Text}</p>
-                )}
-                {hadith.Bangla_Text && activeLang === "bn" && (
-                  <p className="bangla-text">{hadith.Bangla_Text}</p>
-                )}
-                {hadith.English_Text && activeLang === "en" && (
-                  <p className="english-text">"{hadith.English_Text}"</p>
-                )}
-              </div>
-
-              {/* Card footer */}
-              <div className="card-footer">
-                <div className="ref-block">
-                  <div className="ref-book">
-                    <span>{hadith.Book}</span>
-                    <span className="ref-sep">·</span>
-                    <span className="ref-inline">{hadith["In-book reference"]}</span>
-                  </div>
-                </div>
-
-                <button className="report-btn" onClick={() => setIsReportOpen(true)}>
-                  <IconFlag />
-                  Report Issue
-                </button>
-              </div>
-            </article>
+              )}
+            </div>
           ) : (
             <EmptyState />
           )}
@@ -885,22 +1006,24 @@ export default function HadithApp() {
         </div>
 
         {/* ── Report Modal ── */}
-        {isReportOpen && (
+        {/* FIXED: Checked !!reportingHadith instead of isReportOpen */}
+        {!!reportingHadith && (
           <div
             className="modal-backdrop"
-            onClick={e => e.target === e.currentTarget && setIsReportOpen(false)}
+            onClick={e => e.target === e.currentTarget && setReportingHadith(null)}
           >
             <div className="modal">
               {!isSuccess ? (
                 <>
                   <div className="modal-header">
                     <h2 className="modal-title">Report Issue</h2>
-                    <button className="modal-close" onClick={() => setIsReportOpen(false)} aria-label="Close">
+                    <button className="modal-close" onClick={() => setReportingHadith(null)} aria-label="Close">
                       <IconClose />
                     </button>
                   </div>
                   <p className="modal-sub">
-                    Reporting <strong>{hadith?.Book} — {hadith?.["In-book reference"]}</strong>
+                    {/* FIXED: using reportingHadith instead of hadith?.Book */}
+                    Reporting <strong>{reportingHadith.Book} — {reportingHadith["In-book reference"]}</strong>
                   </p>
                   <form onSubmit={handleReportSubmit}>
                     <div className="modal-textarea-wrap">
@@ -913,7 +1036,7 @@ export default function HadithApp() {
                       />
                     </div>
                     <div className="modal-actions">
-                      <button type="button" className="btn-ghost" onClick={() => setIsReportOpen(false)}>Cancel</button>
+                      <button type="button" className="btn-ghost" onClick={() => setReportingHadith(null)}>Cancel</button>
                       <button type="submit" className="btn-submit" disabled={!reportText.trim()}>Submit</button>
                     </div>
                   </form>
