@@ -1,22 +1,22 @@
-# 📖 Hadith Explorer
+# Hadith Explorer
 
 A full-stack web application for browsing, searching, and exploring Islamic Hadith collections across multiple books, languages, and chapters.
 
 ---
 
-## ✨ Features
+## Features
 
-- 📚 **Multiple Hadith Books** — Bukhari, Muslim, Nasai, Abu Dawud, Tirmidhi, Ibn Majah, Malik, Nawawi, and more
-- 🌐 **Trilingual Support** — Arabic, English, and Bangla translations side by side
-- 🔀 **Random Hadith** — Get a random hadith, optionally filtered by book or chapter
-- 🔍 **Hadith Search** — Search by hadith number with intelligent pattern matching
-- 📄 **Paginated Browsing** — Navigate hadiths with clean pagination
-- ⚡ **In-Memory Caching** — Fast dropdown responses for sources and chapters
-- 🚨 **Report Issues** — Users can report translation errors or issues directly from the UI
+- **Multiple Hadith Books** — Bukhari, Muslim, Nasai, Abu Dawud, Tirmidhi, Ibn Majah, Malik, Nawawi, and more
+- **Trilingual Support** — Arabic, English, and Bangla translations side by side
+- **Random Hadith** — Get a random hadith, optionally filtered by book or chapter
+- **Hadith Search** — Search by hadith number with intelligent pattern matching
+- **Paginated Browsing** — Navigate hadiths with clean pagination
+- **In-Memory Caching** — Fast dropdown responses for sources and chapters
+- **Report Issues** — Users can report translation errors or issues directly from the UI
 
 ---
 
-## 🏗️ Tech Stack
+## Tech Stack
 
 ### Backend
 | Technology | Purpose |
@@ -38,7 +38,7 @@ A full-stack web application for browsing, searching, and exploring Islamic Hadi
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 hadith/
@@ -61,7 +61,7 @@ hadith/
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -120,7 +120,7 @@ The frontend will be available at `http://localhost:3000`.
 
 ---
 
-## 🌐 API Reference
+## API Reference
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -133,7 +133,7 @@ The frontend will be available at `http://localhost:3000`.
 
 ---
 
-## 🌱 Database Seeding
+## Database Seeding
 
 To seed the Supabase database with hadith data from the JSON source files:
 
@@ -146,12 +146,12 @@ This script merges Arabic, English, and Bangla JSON files for all books and uplo
 
 ---
 
-## 🤲 Acknowledgements
+## Acknowledgements
 
 Hadith data sourced from open Islamic text repositories. JazakAllah Khair to all contributors who made these translations available.
 
 ---
 
-## 📄 License
+## License
 
 This project is open source. Feel free to use and contribute.
